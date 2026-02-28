@@ -1,0 +1,661 @@
+{
+  "_description": "Tool index. Contains formal definitions of each tool to send to the Claude API. The 'implementation_ref' field points to the corresponding function in tools.json.",
+  "version": "1.0.0",
+  "last_updated": "2025-02-17",
+  "tools": [
+    {
+      "name": "screenshot",
+      "description": "Captures the current screen and returns it as an image. The image includes an overlaid grid with numerical coordinates. Use the numbers from this grid as a mandatory visual reference to calculate exact X and Y values before using the mouse_click tool.",
+      "implementation_ref": "screenshot",
+      "returns": "image",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "region": {
+            "type": "object",
+            "description": "Region to capture. If null, captures the entire screen.",
+            "properties": {
+              "x": {
+                "type": "integer"
+              },
+              "y": {
+                "type": "integer"
+              },
+              "width": {
+                "type": "integer"
+              },
+              "height": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "mouse_click",
+      "description": "Clicks the mouse at a screen position.",
+      "implementation_ref": "mouse_click",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer",
+            "description": "X coordinate in pixels"
+          },
+          "y": {
+            "type": "integer",
+            "description": "Y coordinate in pixels"
+          },
+          "button": {
+            "type": "string",
+            "enum": [
+              "left",
+              "right",
+              "middle"
+            ],
+            "default": "left"
+          },
+          "clicks": {
+            "type": "integer",
+            "description": "Number of clicks (1 or 2)",
+            "default": 1
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ]
+      }
+    },
+    {
+      "name": "mouse_move",
+      "description": "Moves the mouse to a position without clicking.",
+      "implementation_ref": "mouse_move",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          },
+          "duration": {
+            "type": "number",
+            "description": "Movement duration in seconds",
+            "default": 0.5
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ]
+      }
+    },
+    {
+      "name": "mouse_scroll",
+      "description": "Scrolls the mouse at a position.",
+      "implementation_ref": "mouse_scroll",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          },
+          "clicks": {
+            "type": "integer",
+            "description": "Positive = up, negative = down"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "clicks"
+        ]
+      }
+    },
+    {
+      "name": "keyboard_type",
+      "description": "Types text using the keyboard in the active element.",
+      "implementation_ref": "keyboard_type",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Text to type"
+          },
+          "interval": {
+            "type": "number",
+            "description": "Pause between keys in seconds",
+            "default": 0.05
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "keyboard_hotkey",
+      "description": "Executes a keyboard shortcut like Ctrl+C, Alt+F4, Win+D, etc.",
+      "implementation_ref": "keyboard_hotkey",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of keys for the shortcut. Example: ['ctrl', 'c']"
+          }
+        },
+        "required": [
+          "keys"
+        ]
+      }
+    },
+    {
+      "name": "keyboard_press",
+      "description": "Presses a special key (enter, esc, tab, delete, f1-f12, etc.).",
+      "implementation_ref": "keyboard_press",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Name of the key"
+          }
+        },
+        "required": [
+          "key"
+        ]
+      }
+    },
+    {
+      "name": "run_command",
+      "description": "Executes a command in the operating system and returns the output.",
+      "implementation_ref": "run_command",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Command to execute"
+          },
+          "shell": {
+            "type": "string",
+            "enum": [
+              "cmd",
+              "powershell",
+              "bash"
+            ],
+            "default": "powershell"
+          },
+          "timeout": {
+            "type": "integer",
+            "description": "Maximum wait time in seconds",
+            "default": 30
+          },
+          "working_directory": {
+            "type": "string",
+            "description": "Working directory. Optional."
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "open_application",
+      "description": "Opens an application or program installed on the system.",
+      "implementation_ref": "open_application",
+      "returns": "text",
+      "platform": "windows",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "app": {
+            "type": "string",
+            "description": "Name of the executable or full path"
+          },
+          "args": {
+            "type": "string",
+            "description": "Additional arguments. Optional."
+          },
+          "wait_seconds": {
+            "type": "number",
+            "description": "Seconds to wait after opening",
+            "default": 2.0
+          }
+        },
+        "required": [
+          "app"
+        ]
+      }
+    },
+    {
+      "name": "open_url",
+      "description": "Opens a URL in the default browser.",
+      "implementation_ref": "open_url",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Full URL including https://"
+          }
+        },
+        "required": [
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "file_read",
+      "description": "Reads the content of a text file.",
+      "implementation_ref": "file_read",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Full path to the file"
+          },
+          "encoding": {
+            "type": "string",
+            "default": "utf-8"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      }
+    },
+    {
+      "name": "file_write",
+      "description": "Writes or overwrites content in a file.",
+      "implementation_ref": "file_write",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "overwrite",
+              "append"
+            ],
+            "default": "overwrite"
+          },
+          "encoding": {
+            "type": "string",
+            "default": "utf-8"
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ]
+      }
+    },
+    {
+      "name": "file_delete",
+      "description": "Deletes a file. Requires user confirmation.",
+      "implementation_ref": "file_delete",
+      "returns": "text",
+      "platform": "all",
+      "requires_confirmation": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      }
+    },
+    {
+      "name": "file_copy",
+      "description": "Copies a file or folder to another location.",
+      "implementation_ref": "file_copy",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "destination": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "destination"
+        ]
+      }
+    },
+    {
+      "name": "file_move",
+      "description": "Moves a file or folder to another location.",
+      "implementation_ref": "file_move",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "destination": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "destination"
+        ]
+      }
+    },
+    {
+      "name": "directory_list",
+      "description": "Lists the contents of a directory.",
+      "implementation_ref": "directory_list",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "default": "."
+          },
+          "show_hidden": {
+            "type": "boolean",
+            "default": false
+          },
+          "recursive": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "directory_create",
+      "description": "Creates a folder (including intermediate subfolders if necessary).",
+      "implementation_ref": "directory_create",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      }
+    },
+    {
+      "name": "memory_search",
+      "description": "Searches long-term memory for fragments containing keywords. Returns only relevant fragments.",
+      "implementation_ref": "memory_search",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "keywords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of keywords to search for"
+          },
+          "max_results": {
+            "type": "integer",
+            "default": 5
+          }
+        },
+        "required": [
+          "keywords"
+        ]
+      }
+    },
+    {
+      "name": "add_tool",
+      "description": "Adds a new tool to the agent. Requires user confirmation. The tool is added to toolindex.json and tools.json.",
+      "implementation_ref": "add_tool",
+      "returns": "text",
+      "platform": "all",
+      "requires_confirmation": true,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Unique tool name (snake_case)"
+          },
+          "description": {
+            "type": "string",
+            "description": "Clear description of what the tool does"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "all",
+              "windows",
+              "linux",
+              "mac"
+            ],
+            "default": "all"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "python",
+              "cmd",
+              "powershell",
+              "bash"
+            ],
+            "description": "Implementation type"
+          },
+          "code": {
+            "type": "string",
+            "description": "Python code or system command to execute"
+          },
+          "returns": {
+            "type": "string",
+            "enum": [
+              "text",
+              "image",
+              "json"
+            ],
+            "default": "text"
+          },
+          "input_schema": {
+            "type": "object",
+            "description": "JSON schema of input parameters"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "type",
+          "code",
+          "input_schema"
+        ]
+      }
+    },
+    {
+      "name": "web_search",
+      "description": "Ultra-fast web search without a graphical environment. Returns titles, URLs, and snippets of the best results. Use it to search for up-to-date data.",
+      "implementation_ref": "web_search",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "The search query (e.g., 'german shepherd dog')"
+          },
+          "max_results": {
+            "type": "integer",
+            "description": "Maximum number of results to return",
+            "default": 5
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "web_fetch",
+      "description": "Downloads a web page from its URL and extracts all its clean text (processed DOM, without HTML code or menus). Ideal for reading articles or extracting detailed information from a web_search result.",
+      "implementation_ref": "web_fetch",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The full URL of the web page to read"
+          }
+        },
+        "required": [
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "web_post",
+      "description": "Sends data to a URL using the HTTP POST method. Useful for sending information to web forms, webhooks, or APIs (e.g., webhook.site, Formspree).",
+      "implementation_ref": "web_post",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The destination URL (endpoint) where the data will be sent."
+          },
+          "payload": {
+            "type": "object",
+            "description": "JSON dictionary with the data to send (key-value pairs)."
+          },
+          "as_json": {
+            "type": "boolean",
+            "description": "If true, sends the data as application/json. If false, as regular form-data. Default is true.",
+            "default": true
+          }
+        },
+        "required": [
+          "url",
+          "payload"
+        ]
+      }
+    },
+    {
+      "name": "read_document",
+      "description": "Reads the content of a PDF or text file (txt, md, py) and returns its content.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "The full path to the file you want to read."
+          }
+        },
+        "required": [
+          "path"
+        ]
+      }
+    },
+    {
+      "name": "send_telegram_message",
+      "description": "Sends a text message to the user via Telegram proactively. Use this ALWAYS when the user asks you to notify, warn, or send something via Telegram.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "The complete and formatted message you want to send to the user."
+          }
+        },
+        "required": [
+          "message"
+        ]
+      }
+    },
+    {
+      "name": "send_telegram_photo",
+      "description": "Sends an image/photo to the user via Telegram. Use this when the user asks you to send a screenshot, image, or any visual content through Telegram. TIP: After taking a screenshot, the clean version (without grid) is saved at 'tmp/last_screenshot.png'.",
+      "implementation_ref": "send_telegram_photo",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "image_path": {
+            "type": "string",
+            "description": "Absolute path to the image file to send."
+          },
+          "caption": {
+            "type": "string",
+            "description": "Optional caption text to accompany the photo.",
+            "default": ""
+          }
+        },
+        "required": [
+          "image_path"
+        ]
+      }
+    }
+  ]
+}

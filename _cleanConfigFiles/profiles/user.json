@@ -1,0 +1,34 @@
+{
+  "_description": "User profile. The agent reads this file to personalize its behavior and communication.",
+  "identity": {
+    "name": "",
+    "location": "",
+    "timezone": "Europe/Madrid",
+    "language": "en"
+  },
+  "preferences": {
+    "communication": {
+      "preferred_tone": "direct",
+      "detail_level": "medium",
+      "confirm_before_destructive": true,
+      "notify_telegram_on_complete": true
+    },
+    "system": {
+      "preferred_browser": "chrome",
+      "preferred_editor": "vscode",
+      "preferred_terminal": "powershell",
+      "desktop_path": "C:\\Users\\MyUsername\\Desktop",
+      "documents_path": "C:\\Users\\MyUsername\\Documents"
+    }
+  },
+  "hobbies": [
+  ],
+  "work": {
+    "role": "",
+    "industry": "",
+    "tools_used_daily": []
+  },
+  "trusted_apps": [],
+  "notes": [],
+  "system": {}
+}

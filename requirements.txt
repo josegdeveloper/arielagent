@@ -1,0 +1,23 @@
+# ARIEL — PYTHON DEPENDENCIES
+# INSTALL WITH: pip install -r requirements.txt
+# OR RUN: setup.bat  (WINDOWS)
+
+# ── CORE: REQUIRED FOR ARIEL TO WORK ──────────────────────────
+anthropic>=0.40.0               # OFFICIAL ANTHROPIC API CLIENT (CLAUDE LLM)
+pyautogui>=0.9.54               # MOUSE, KEYBOARD AND SCREENSHOT CONTROL
+Pillow>=10.0.0                  # IMAGE PROCESSING (SCREENSHOTS, RESIZING)
+streamlit                       # WEB-BASED GUI FRAMEWORK
+cryptography                    # AES-128 ENCRYPTION FOR TOKENS AND PASSWORDS
+
+# ── MEMORY AND SEARCH ─────────────────────────────────────────
+numpy>=1.24.0                   # COSINE SIMILARITY FOR SEMANTIC MEMORY SEARCH
+sentence-transformers            # EMBEDDING MODEL FOR LONG-TERM MEMORY
+
+# ── AGENT TOOLS ───────────────────────────────────────────────
+ddgs                            # WEB SEARCH VIA DUCKDUCKGO
+beautifulsoup4                  # HTML CONTENT EXTRACTION FROM WEB PAGES
+requests                        # HTTP REQUESTS
+pypdf                           # PDF FILE READING AND PROCESSING
+
+# ── EXTERNAL INTEGRATIONS ─────────────────────────────────────
+python-telegram-bot             # TELEGRAM BOT FOR NOTIFICATIONS AND REMOTE CONTROL

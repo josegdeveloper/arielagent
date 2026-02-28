@@ -1,0 +1,204 @@
+{
+  "_description": "Tool implementations. Each entry corresponds to an 'implementation_ref' in toolindex.json.",
+  "version": "1.1.0",
+  "implementations": {
+    "screenshot": {
+      "type": "python",
+      "description": "Captures the screen using pyautogui and Pillow.",
+      "dependencies": [
+        "pyautogui",
+        "Pillow"
+      ],
+      "code": "import pyautogui\nfrom PIL import Image, ImageDraw\nfrom io import BytesIO\nimport base64\nfrom pathlib import Path\n\n# Ensure tmp/ directory exists\ntmp_dir = Path('.') / 'tmp'\ntmp_dir.mkdir(exist_ok=True)\n\nregion = params.get('region')\nif region:\n    img = pyautogui.screenshot(region=(region['x'], region['y'], region['width'], region['height']))\nelse:\n    img = pyautogui.screenshot()\n\n# Save a CLEAN screenshot (no grid) for other tools like send_telegram_photo\nclean_path = str(tmp_dir / 'last_screenshot.png')\nimg.save(clean_path)\n\n# --- DRAW HIGH CONTRAST GRID (only on the copy sent to Claude) ---\ngrid_img = img.copy()\ndraw = ImageDraw.Draw(grid_img, 'RGBA')\nwidth, height = grid_img.size\nstep = 100\n\n# Vertical lines (X Axis)\nfor x in range(0, width, step):\n    draw.line([(x, 0), (x, height)], fill=(255, 0, 0, 120), width=1)\n    draw.rectangle([(x + 2, 2), (x + 28, 14)], fill=(0, 0, 0, 255))\n    draw.text((x + 4, 2), str(x), fill=(255, 255, 255, 255))\n\n# Horizontal lines (Y Axis)\nfor y in range(0, height, step):\n    draw.line([(0, y), (width, y)], fill=(255, 0, 0, 120), width=1)\n    if y > 0:\n        draw.rectangle([(2, y + 2), (28, y + 14)], fill=(0, 0, 0, 255))\n        draw.text((4, y + 2), str(y), fill=(255, 255, 255, 255))\n\n# Save grid version for debugging\ngrid_img.save(str(tmp_dir / 'debug_screenshot.png'))\n\n# Return grid version to Claude (so it can read coordinates)\nbuffer = BytesIO()\ngrid_img.save(buffer, format='PNG')\nb64 = base64.standard_b64encode(buffer.getvalue()).decode('utf-8')\nreturn {'type': 'image', 'data': b64, 'media_type': 'image/png', 'clean_path': clean_path}\n"
+    },
+    "mouse_click": {
+      "type": "python",
+      "description": "Mouse click with pyautogui.",
+      "dependencies": [
+        "pyautogui"
+      ],
+      "code": "import pyautogui\npyautogui.click(params['x'], params['y'], button=params.get('button','left'), clicks=params.get('clicks',1))\nreturn f\"Clicked {params.get('button','left')} at ({params['x']}, {params['y']})\""
+    },
+    "mouse_move": {
+      "type": "python",
+      "description": "Move mouse without clicking.",
+      "dependencies": [
+        "pyautogui"
+      ],
+      "code": "import pyautogui\npyautogui.moveTo(params['x'], params['y'], duration=params.get('duration', 0.5))\nreturn f\"Mouse moved to ({params['x']}, {params['y']})\""
+    },
+    "mouse_scroll": {
+      "type": "python",
+      "description": "Mouse scroll.",
+      "dependencies": [
+        "pyautogui"
+      ],
+      "code": "import pyautogui\npyautogui.scroll(params['clicks'], x=params['x'], y=params['y'])\nreturn f\"Scrolled {params['clicks']} at ({params['x']}, {params['y']})\""
+    },
+    "keyboard_type": {
+      "type": "python",
+      "description": "Foolproof text typing using the clipboard (Ctrl+V) to avoid keyboard layout bugs.",
+      "dependencies": [
+        "pyautogui",
+        "pyperclip",
+        "time"
+      ],
+      "code": "import pyautogui\nimport pyperclip\nimport time\n\ntext = params['text']\n# 1. Copy to clipboard\npyperclip.copy(text)\ntime.sleep(0.1)\n\n# 2. Paste with Ctrl+V\npyautogui.hotkey('ctrl', 'v')\n\nreturn f\"Text typed (via clipboard): {text}\""
+    },
+    "keyboard_hotkey": {
+      "type": "python",
+      "description": "Keyboard shortcut.",
+      "dependencies": [
+        "pyautogui"
+      ],
+      "code": "import pyautogui\npyautogui.hotkey(*params['keys'])\nreturn f\"Shortcut executed: {' + '.join(params['keys'])}\""
+    },
+    "keyboard_press": {
+      "type": "python",
+      "description": "Special key press.",
+      "dependencies": [
+        "pyautogui"
+      ],
+      "code": "import pyautogui\npyautogui.press(params['key'])\nreturn f\"Key pressed: {params['key']}\""
+    },
+    "run_command": {
+      "type": "python",
+      "description": "Executes operating system commands.",
+      "dependencies": [
+        "subprocess"
+      ],
+      "code": "import subprocess\nshell = params.get('shell', 'powershell')\ntimeout = params.get('timeout', 30)\ncwd = params.get('working_directory')\n\nif shell == 'powershell':\n    cmd = ['powershell', '-Command', params['command']]\nelif shell == 'cmd':\n    cmd = ['cmd', '/c', params['command']]\nelse:\n    cmd = ['bash', '-c', params['command']]\n\nresult = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=timeout, cwd=cwd)\noutput = result.stdout or ''\nerrors = result.stderr or ''\nreturn f\"Output: {output} | Errors: {errors}\""
+    },
+    "open_application": {
+      "type": "python",
+      "description": "Opens an application.",
+      "dependencies": [
+        "subprocess",
+        "time"
+      ],
+      "code": "import subprocess\nimport sys\nimport time\n\napp = params['app']\nargs = params.get('args', '')\n\nif sys.platform == 'win32':\n    # On Windows, use 'start' command which can resolve common app names\n    # like 'chrome', 'firefox', 'notepad', 'excel', etc.\n    # The empty \"\" is required as the window title parameter for 'start'.\n    cmd = f'start \"\" \"{app}\" {args}'.strip()\n    subprocess.Popen(cmd, shell=True)\nelse:\n    cmd = f'{app} {args}'.strip()\n    subprocess.Popen(cmd, shell=True)\n\ntime.sleep(params.get('wait_seconds', 2.0))\nreturn f\"Application opened: {app}\"\n"
+    },
+    "open_url": {
+      "type": "python",
+      "description": "Opens a URL in the default browser.",
+      "dependencies": [
+        "webbrowser"
+      ],
+      "code": "import webbrowser\n# new=2 forces a new tab so it doesn't replace the ARIEL GUI tab\nwebbrowser.open(params['url'], new=2)\nreturn f\"URL opened in new tab: {params['url']}\""
+    },
+    "file_read": {
+      "type": "python",
+      "description": "Reads a text file.",
+      "dependencies": [
+        "pathlib"
+      ],
+      "code": "from pathlib import Path\ncontent = Path(params['path']).read_text(encoding=params.get('encoding','utf-8'))\nreturn content"
+    },
+    "file_write": {
+      "type": "python",
+      "description": "Writes to a text file.",
+      "dependencies": [
+        "pathlib"
+      ],
+      "code": "from pathlib import Path\np = Path(params['path'])\np.parent.mkdir(parents=True, exist_ok=True)\nmode = 'a' if params.get('mode') == 'append' else 'w'\nwith open(p, mode, encoding=params.get('encoding','utf-8')) as f:\n    f.write(params['content'])\nreturn f\"File saved: {params['path']}\""
+    },
+    "file_delete": {
+      "type": "python",
+      "description": "Deletes a file.",
+      "dependencies": [
+        "pathlib"
+      ],
+      "code": "from pathlib import Path\nPath(params['path']).unlink()\nreturn f\"File deleted: {params['path']}\""
+    },
+    "file_copy": {
+      "type": "python",
+      "description": "Copies a file or folder.",
+      "dependencies": [
+        "shutil",
+        "pathlib"
+      ],
+      "code": "import shutil\nfrom pathlib import Path\nif Path(params['source']).is_dir():\n    shutil.copytree(params['source'], params['destination'])\nelse:\n    shutil.copy2(params['source'], params['destination'])\nreturn f\"Copied: {params['source']} -> {params['destination']}\""
+    },
+    "file_move": {
+      "type": "python",
+      "description": "Moves a file or folder.",
+      "dependencies": [
+        "shutil"
+      ],
+      "code": "import shutil\nshutil.move(params['source'], params['destination'])\nreturn f\"Moved: {params['source']} -> {params['destination']}\""
+    },
+    "directory_list": {
+      "type": "python",
+      "description": "Lists directory contents.",
+      "dependencies": [
+        "pathlib"
+      ],
+      "code": "from pathlib import Path\np = Path(params.get('path', '.'))\nshow_hidden = params.get('show_hidden', False)\nrecursive = params.get('recursive', False)\n\nitems = []\nglob_pattern = '**/*' if recursive else '*'\nfor item in sorted(p.glob(glob_pattern)):\n    if not show_hidden and item.name.startswith('.'):\n        continue\n    kind = 'DIR ' if item.is_dir() else 'FILE'\n    items.append(f\"{kind} {item}\")\n\nreturn '\\n'.join(items) if items else '(Empty directory)'"
+    },
+    "directory_create": {
+      "type": "python",
+      "description": "Creates a folder.",
+      "dependencies": [
+        "pathlib"
+      ],
+      "code": "from pathlib import Path\nPath(params['path']).mkdir(parents=True, exist_ok=True)\nreturn f\"Folder created: {params['path']}\""
+    },
+    "web_search": {
+      "type": "python",
+      "description": "Ultra-fast web search without a graphical environment.",
+      "dependencies": [
+        "ddgs"
+      ],
+      "code": "from ddgs import DDGS\nquery = params['query']\nmax_results = params.get('max_results', 5)\ntry:\n    with DDGS() as ddgs:\n        results = list(ddgs.text(query, max_results=max_results))\n    formatted = []\n    for i, r in enumerate(results, 1):\n        formatted.append(f\"{i}. Title: {r['title']}\\n   URL: {r['href']}\\n   Snippet: {r['body']}\\n\")\n    return '\\n'.join(formatted) if formatted else 'No results found.'\nexcept Exception as e:\n    return f'Search error: {e}'"
+    },
+    "web_fetch": {
+      "type": "python",
+      "description": "Extracts clean text from a URL's DOM using BeautifulSoup.",
+      "dependencies": [
+        "requests",
+        "beautifulsoup4"
+      ],
+      "code": "import requests\nfrom bs4 import BeautifulSoup\nurl = params['url']\ntry:\n    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}\n    response = requests.get(url, headers=headers, timeout=15)\n    response.raise_for_status()\n    soup = BeautifulSoup(response.text, 'html.parser')\n    # Remove scripts, styles and nav menus to leave only content\n    for script in soup(['script', 'style', 'nav', 'footer', 'header']):\n        script.extract()\n    text = soup.get_text(separator='\\n', strip=True)\n    return text[:10000] # Limit to 10000 characters to not overflow Claude's memory\nexcept Exception as e:\n    return f'Error reading URL: {e}'"
+    },
+    "web_post": {
+      "type": "python",
+      "description": "Executes an HTTP POST request using the requests library.",
+      "dependencies": [
+        "requests"
+      ],
+      "code": "import requests\nurl = params['url']\npayload = params['payload']\nas_json = params.get('as_json', True)\ntry:\n    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}\n    if as_json:\n        response = requests.post(url, json=payload, headers=headers, timeout=15)\n    else:\n        response = requests.post(url, data=payload, headers=headers, timeout=15)\n    response.raise_for_status()\n    return f\"POST successful (Code {response.status_code}). Server response: {response.text[:500]}\"\nexcept Exception as e:\n    return f\"Error in POST request: {e}\""
+    },
+    "read_document": {
+      "type": "python",
+      "description": "Reads the content of a PDF or plain text file (txt, md, py) from a local path.",
+      "dependencies": [
+        "pypdf"
+      ],
+      "code": "import pypdf\nfrom pathlib import Path\ntry:\n    path = Path(params['path'])\n    if not path.exists(): return f'Error: File at {path} does not exist.'\n    \n    # PDF Handling\n    if path.suffix.lower() == '.pdf':\n        with open(path, 'rb') as f:\n            reader = pypdf.PdfReader(f)\n            text = ''\n            for page in reader.pages:\n                text += page.extract_text() + '\\n'\n            return text[:15000] if text else 'The PDF appears to be empty or an image.'\n    \n    # Text files handling (utf-8)\n    return path.read_text(encoding='utf-8', errors='replace')[:15000]\nexcept Exception as e:\n    return f'Error processing document: {e}'"
+    },
+    "send_telegram_message": {
+      "type": "python",
+      "dependencies": [
+        "requests"
+      ],
+      "code": "import requests\nfrom core.utils import load_json, BASE_DIR\nfrom core.security import decrypt_if_needed\n\nmessage = params['message']\n\nconfig = load_json(BASE_DIR / 'settings' / 'config.json')\ntg_config = config.get('integrations', {}).get('telegram', {})\ntoken = decrypt_if_needed(tg_config.get('bot_token', ''))\nchat_id = tg_config.get('chat_id')\n\nif not token or not chat_id:\n    return 'Error: Telegram Token or Chat ID are not configured in the Connectors tab.'\n\nurl = f'https://api.telegram.org/bot{token}/sendMessage'\npayload = {'chat_id': chat_id, 'text': message}\n\ntry:\n    response = requests.post(url, json=payload, timeout=10)\n    response.raise_for_status()\n    return 'Message successfully sent to the user via Telegram.'\nexcept Exception as e:\n    return f'Error sending Telegram message: {e}'\n"
+    },
+    "memory_search": {
+      "type": "python",
+      "description": "Searches long-term memory using keywords and semantic similarity.",
+      "dependencies": [
+        "json",
+        "pathlib"
+      ],
+      "code": "import json, math\nfrom pathlib import Path\n\n# Load memory and embedding files\nbase = Path(__file__).parent if '__file__' in dir() else Path('.')\n# Navigate to project root from core/ or use current dir\nfor candidate in [Path('.'), Path('..'), Path(__file__).parent.parent if '__file__' in dir() else Path('.')]:\n    mem_path = candidate / 'memory' / 'longtermmemory.json'\n    if mem_path.exists():\n        base = candidate\n        break\n\nlt_path = base / 'memory' / 'longtermmemory.json'\nemb_path = base / 'memory' / 'embeddings.json'\n\nlt_data = json.loads(lt_path.read_text(encoding='utf-8')) if lt_path.exists() else {}\nmemories = lt_data.get('memories', [])\n\nif not memories:\n    return 'No long-term memories stored yet.'\n\nkeywords = params.get('keywords', [])\nmax_results = params.get('max_results', 5)\n\n# Score each memory by keyword matching\nresults = []\nfor mem in memories:\n    content_lower = mem.get('content', '').lower()\n    matches = sum(1 for kw in keywords if kw.lower() in content_lower)\n    if matches > 0:\n        results.append({'content': mem['content'], 'timestamp': mem.get('timestamp', ''), 'score': matches})\n\nresults.sort(key=lambda x: x['score'], reverse=True)\ntop = results[:max_results]\n\nif not top:\n    return f'No memories found matching keywords: {keywords}'\n\noutput = f'Found {len(top)} relevant memories:\\n\\n'\nfor i, r in enumerate(top, 1):\n    output += f'{i}. [{r[\"timestamp\"]}] {r[\"content\"]}\\n\\n'\nreturn output"
+    },
+    "send_telegram_photo": {
+      "type": "python",
+      "description": "Sends a photo to the user via Telegram.",
+      "dependencies": [
+        "requests"
+      ],
+      "code": "import requests\nfrom pathlib import Path\nfrom core.utils import load_json, BASE_DIR\nfrom core.security import decrypt_if_needed\n\nimage_path = params['image_path']\ncaption = params.get('caption', '')\n\nconfig = load_json(BASE_DIR / 'settings' / 'config.json')\ntg_config = config.get('integrations', {}).get('telegram', {})\ntoken = decrypt_if_needed(tg_config.get('bot_token', ''))\nchat_id = tg_config.get('chat_id')\n\nif not token or not chat_id:\n    return 'Error: Telegram Token or Chat ID are not configured.'\n\nimg_file = Path(image_path)\nif not img_file.exists():\n    return f'Error: Image not found at {image_path}'\n\nurl = f'https://api.telegram.org/bot{token}/sendPhoto'\n\ntry:\n    with open(img_file, 'rb') as photo:\n        files = {'photo': photo}\n        payload = {'chat_id': chat_id, 'caption': caption}\n        response = requests.post(url, data=payload, files=files, timeout=30)\n        response.raise_for_status()\n    return 'Photo successfully sent to the user via Telegram.'\nexcept Exception as e:\n    return f'Error sending Telegram photo: {e}'\n"
+    }
+  }
+}

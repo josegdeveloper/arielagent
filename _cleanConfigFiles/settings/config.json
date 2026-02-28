@@ -1,0 +1,33 @@
+{
+  "_description": "General settings",
+  "api": {
+    "provider": "anthropic",
+    "api_key": "[YOUR-KEY-HERE]",
+    "model": "claude-sonnet-4-5-20250929",
+    "max_tokens": 4096,
+    "temperature": 0.0
+  },
+  "agent": {
+    "max_steps_per_task": 15,
+    "language": "en"
+  },
+  "paths": {
+    "laws": "settings/laws.json",
+    "agent_profile": "profiles/agent.json",
+    "user_profile": "profiles/user.json",
+    "tool_index": "tools/toolindex.json",
+    "tools": "tools/tools.json"
+  },
+  "logging": {
+    "log_dir": "logs",
+    "level": "INFO",
+    "output_dest": "GUI Tab"
+  },
+  "integrations": {
+    "telegram": {
+      "enabled": false,
+      "bot_token": "",
+      "chat_id": ""
+    }
+  }
+}

@@ -73,9 +73,7 @@ ARIEL/
 │   ├── tools.json
 │   └── toolindex.json
 ├── uploads/
-├── gui.py
-├── main.py
-├── start.py
+├── ariel.py
 ├── requirements.txt
 ├── setup.bat
 ├── INSTALL_es.md

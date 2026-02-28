@@ -47,6 +47,12 @@
 
 ---
 
+<p align="center">
+  <img src="https://arielagent.ai/images/ariel-agent-chat.png" alt="ARIEL Chat Interface" width="700">
+</p>
+
+---
+
 ## 🚀 Quick Start
 
 ```bash
@@ -167,6 +173,12 @@ This project is open source. See the [LICENSE](LICENSE) file for details.
 **📊 Logging dual** — Archivos `.log` legibles para humanos más `.json` estructurado para análisis y depuración.
 
 **🖼️ Interfaz web** — Un panel limpio basado en Streamlit. Ajustes, visor de memoria, inspector de herramientas, programador de tareas — todo visual, sin archivos de configuración que editar.
+
+---
+
+<p align="center">
+  <img src="https://arielagent.ai/images/ariel-agent-chat.png" alt="Interfaz de chat de ARIEL" width="700">
+</p>
 
 ---
 

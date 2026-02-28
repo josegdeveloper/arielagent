@@ -1,5 +1,7 @@
 # ARIEL — Installation Guide
 
+> ⚠️ **Important Safety Recommendation**: ARIEL is an AI agent with the ability to control your mouse, keyboard, execute system commands, and manage files. AI behavior can be unpredictable. We strongly recommend running ARIEL inside a **virtual machine** (e.g., VirtualBox, VMware, Hyper-V) or on a **dedicated computer** that does not contain sensitive personal data. Use at your own risk.
+
 ## Prerequisites
 
 - **Windows 10/11** (64-bit)
@@ -73,7 +75,9 @@ ARIEL/
 │   ├── tools.json
 │   └── toolindex.json
 ├── uploads/
-├── ariel.py
+├── gui.py
+├── main.py
+├── start.py
 ├── requirements.txt
 ├── setup.bat
 ├── INSTALL_es.md

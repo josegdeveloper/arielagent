@@ -71,6 +71,8 @@ Your browser will open at `http://localhost:8501`. On first launch, ARIEL will a
 
 > **Windows users**: You can also double-click `setup.bat` for an automated installation.
 
+> ⚠️ **Important Safety Recommendation**: ARIEL is an AI agent with the ability to control your mouse, keyboard, execute system commands, and manage files. AI behavior can be unpredictable. We strongly recommend running ARIEL inside a **virtual machine** (e.g., VirtualBox, VMware, Hyper-V) or on a **dedicated computer** that does not contain sensitive personal data. Use at your own risk.
+
 For detailed instructions, see **[INSTALL_en.md](INSTALL_en.md)** (English) or **[INSTALL_es.md](INSTALL_es.md)** (Spanish).
 
 ---
@@ -199,6 +201,8 @@ python ariel.py
 Tu navegador se abrirá en `http://localhost:8501`. En el primer arranque, ARIEL te pedirá que crees una contraseña y configures tu API key.
 
 > **Usuarios de Windows**: También puedes hacer doble clic en `setup.bat` para una instalación automática.
+
+> ⚠️ **Recomendación de seguridad importante**: ARIEL es un agente de IA con capacidad para controlar tu ratón, teclado, ejecutar comandos del sistema y gestionar archivos. El comportamiento de la IA puede ser impredecible. Recomendamos encarecidamente ejecutar ARIEL dentro de una **máquina virtual** (p. ej., VirtualBox, VMware, Hyper-V) o en un **ordenador dedicado** que no contenga datos personales sensibles. Úsalo bajo tu propia responsabilidad.
 
 Para instrucciones detalladas, consulta **[INSTALL_es.md](INSTALL_es.md)** (Español) o **[INSTALL_en.md](INSTALL_en.md)** (Inglés).
 

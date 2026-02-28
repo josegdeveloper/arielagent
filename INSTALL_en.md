@@ -42,6 +42,7 @@ ARIEL/
 ├── core/
 │   ├── agent.py
 │   ├── executor.py
+│   ├── gui.py
 │   ├── logger.py
 │   ├── memory.py
 │   ├── security.py
@@ -56,12 +57,16 @@ ARIEL/
 │   └── laws.json
 ├── logs/
 ├── memory/
+│   ├── embeddings.json
+│   ├── longtermmemory.json
+│   └── shorttermmemory.json
 ├── profiles/
 │   ├── agent.json
 │   ├── user.json
 │   ├── ariel-logo.png
 ├── settings/
 │   ├── config.json
+│   ├── security.json
 │   └── tasks.json
 ├── tmp/
 ├── tools/
@@ -115,7 +120,7 @@ Alternatively, you can edit `settings/config.json` manually:
 
 ```
 cd C:\Users\YourUser\Desktop\ARIEL
-python start.py
+python ariel.py
 ```
 
 Your browser will open automatically with the ARIEL interface at http://localhost:8501.

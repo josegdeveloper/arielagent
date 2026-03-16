@@ -17,7 +17,6 @@ Launched automatically by start.py, or manually with:
 import streamlit as st
 import json
 import os
-import anthropic
 import subprocess
 import sys
 import uuid
@@ -25,6 +24,7 @@ import datetime
 import base64
 from pathlib import Path
 from core.agent import ARIELAgent
+from core.ipc import ArielClient
 from core.utils import get_translations, load_json
 from core.security import (
     is_password_set, verify_password, get_session_key,
@@ -183,6 +183,11 @@ if is_password_set():
                 if verify_password(login_pw):
                     st.session_state.session_key = get_session_key(login_pw)
                     os.environ[SESSION_KEY_ENV] = st.session_state.session_key
+                    # Send session key to the orchestrator so it can decrypt API tokens
+                    try:
+                        ArielClient(BASE_DIR).set_session_key(st.session_state.session_key)
+                    except Exception:
+                        pass  # Orchestrator may not be ready yet — IPC init will retry
                     st.rerun()
                 else:
                     st.error(t.get("login_error", "❌ Incorrect password."))
@@ -219,6 +224,11 @@ else:
                     encrypt_existing_tokens(session_key)
                     st.session_state.session_key = session_key
                     os.environ[SESSION_KEY_ENV] = session_key
+                    # Send session key to the orchestrator so it can decrypt API tokens
+                    try:
+                        ArielClient(BASE_DIR).set_session_key(session_key)
+                    except Exception:
+                        pass  # Orchestrator may not be ready yet — IPC init will retry
                     st.rerun()
         st.stop()
 
@@ -228,13 +238,16 @@ if "session_key" in st.session_state:
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  AUTO-START TELEGRAM AFTER LOGIN
-#  If Telegram is enabled but not running (because start.py couldn't
-#  decrypt the token without the password), start it now that we have
-#  the session key available.
+#  AUTO-START BOTS AFTER LOGIN
+#  If Telegram/WhatsApp are enabled but not running (because start.py
+#  couldn't decrypt tokens without the password), start them now that
+#  we have the session key available.
 # ═══════════════════════════════════════════════════════════════════
 
-if "telegram_autostarted" not in st.session_state:
+if "bots_autostarted" not in st.session_state:
+    _bot_kwargs = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
+
+    # Auto-start Telegram
     tg_conf = _tmp_config.get("integrations", {}).get("telegram", {})
     if tg_conf.get("enabled", False) and tg_conf.get("bot_token"):
         if not is_process_running("telegram.pid"):
@@ -242,22 +255,36 @@ if "telegram_autostarted" not in st.session_state:
                 kill_previous_process("telegram.pid")
                 p_tg = subprocess.Popen(
                     [sys.executable, "gateways/telegram_bot.py"],
-                    cwd=str(BASE_DIR),
-                    **({"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {})
+                    cwd=str(BASE_DIR), **_bot_kwargs
                 )
                 (TMP_DIR / "telegram.pid").write_text(str(p_tg.pid))
             except Exception:
-                pass  # Non-critical — user can start manually from Connectors
-    st.session_state.telegram_autostarted = True
+                pass
+
+    # Auto-start WhatsApp
+    wa_conf = _tmp_config.get("integrations", {}).get("whatsapp", {})
+    if wa_conf.get("enabled", False):
+        if not is_process_running("whatsapp.pid"):
+            try:
+                kill_previous_process("whatsapp.pid")
+                p_wa = subprocess.Popen(
+                    [sys.executable, "gateways/whatsapp_bot.py"],
+                    cwd=str(BASE_DIR), **_bot_kwargs
+                )
+                (TMP_DIR / "whatsapp.pid").write_text(str(p_wa.pid))
+            except Exception:
+                pass
+
+    st.session_state.bots_autostarted = True
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  AGENT INITIALIZATION (runs once per Streamlit session)
-#  Shows a spinner while loading — the first time may take longer
-#  if the embedding model needs to be downloaded (~120MB).
+#  IPC CLIENT INITIALIZATION (runs once per Streamlit session)
+#  Connects to the orchestrator (ariel.py) via local socket.
+#  The orchestrator owns the agent — we're just a thin UI client.
 # ═══════════════════════════════════════════════════════════════════
 
-if "agent" not in st.session_state:
+if "ipc" not in st.session_state:
     try:
         _show_ariel_header()
         st.markdown(
@@ -272,7 +299,30 @@ if "agent" not in st.session_state:
             """,
             unsafe_allow_html=True
         )
-        st.session_state.agent = ARIELAgent()
+
+        # Wait for the orchestrator to be ready (it may still be loading models)
+        import time as _time
+        _ipc = ArielClient(BASE_DIR)
+        _connected = False
+        for _attempt in range(30):
+            if _ipc.ping():
+                _connected = True
+                break
+            _time.sleep(1)
+
+        if not _connected:
+            st.error(t.get("error_ipc",
+                "❌ Could not connect to the ARIEL orchestrator. "
+                "Make sure ariel.py is running."))
+            st.stop()
+
+        st.session_state.ipc = _ipc
+
+        # If we have a session key (from login or CLI), send it to the
+        # orchestrator so it can decrypt ENC:-prefixed API tokens.
+        if "session_key" in st.session_state:
+            _ipc.set_session_key(st.session_state.session_key)
+
         st.session_state.messages = []
 
         # ── First-time welcome: if user profile is empty, greet them ──
@@ -305,27 +355,51 @@ def settings_modal():
 
     st.write(t.get("settings_desc", "Adjust ARIEL's behavior."))
 
-    # -- API Provider & Key --
+    # -- API Provider --
+    provider_options = ["anthropic", "openai"]
+    provider_labels = [
+        t.get("provider_anthropic", "Anthropic (Claude)"),
+        t.get("provider_openai", "OpenAI Compatible (LM Studio, Ollama, GPT...)")
+    ]
+    current_provider = api_conf.get("provider", "anthropic")
+    provider_idx = provider_options.index(current_provider) if current_provider in provider_options else 0
+
+    new_provider = st.selectbox(
+        t.get("set_provider", "Provider"), provider_labels,
+        index=provider_idx,
+        help=t.get("help_provider", "The AI engine.")
+    )
+    new_provider_code = provider_options[provider_labels.index(new_provider)]
+
+    # -- API Key & Base URL --
     col1, col2 = st.columns(2)
     with col1:
-        new_provider = st.selectbox(
-            t.get("set_provider", "Provider"), ["anthropic"], index=0,
-            help=t.get("help_provider", "The AI engine.")
-        )
-    with col2:
-        # Decrypt the API key for display (if encrypted, shows plaintext; if not, as-is)
         display_api_key = decrypt_if_needed(api_conf.get("api_key", ""))
+        key_help = t.get("help_api_key", "Your secret key.")
+        if new_provider_code == "openai":
+            key_help = t.get("help_api_key_local", "API key. For local servers (LM Studio, Ollama) leave empty or type anything.")
         new_api_key = st.text_input(
             t.get("set_api_key", "API Key"),
             value=display_api_key, type="password",
-            help=t.get("help_api_key", "Your secret key.")
+            help=key_help
         )
-        # Show a red warning if the API key is missing or still the placeholder
-        if not new_api_key or not new_api_key.strip() or new_api_key.strip().startswith("["):
+        # Show warning only for Anthropic if key is missing
+        if new_provider_code == "anthropic" and (not new_api_key or not new_api_key.strip() or new_api_key.strip().startswith("[")):
             st.markdown(
                 f"<span style='color:red; font-size:0.85em;'>{t.get('api_key_missing', '⚠️ API Key needs to be introduced')}</span>",
                 unsafe_allow_html=True
             )
+    with col2:
+        # Base URL: only relevant for OpenAI-compatible providers
+        default_url = api_conf.get("base_url", "")
+        if new_provider_code == "openai" and not default_url:
+            default_url = "http://localhost:1234/v1"
+        new_base_url = st.text_input(
+            t.get("set_base_url", "🌐 Base URL"),
+            value=default_url if new_provider_code == "openai" else "",
+            disabled=(new_provider_code != "openai"),
+            help=t.get("help_base_url", "Server URL. LM Studio: http://localhost:1234/v1 · Ollama: http://localhost:11434/v1")
+        )
 
     # -- Model --
     new_model = st.text_input(
@@ -381,18 +455,33 @@ def settings_modal():
         )
         new_log_dest = "Console" if new_log_dest_display == t.get("log_dest_console", "Console") else "GUI Tab"
 
+    # ── Screen Control ──────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown(f"**{t.get('set_screen_control', '🖥️ Screen Control')}**")
+
+    sc_conf = config_data.get("screen_control", {})
+
+    cu_fallback = st.toggle(
+        t.get("set_cu_fallback", "Enable Computer Use fallback (vision-based, higher API cost)"),
+        value=sc_conf.get("computer_use_fallback", False),
+        help=t.get("help_cu_fallback",
+            "When enabled, ARIEL can fall back to screenshot-based control "
+            "for apps without accessibility support. This uses more API tokens.")
+    )
+
     # -- Save button --
     if st.button(t.get("save_changes", "💾 Save Changes"), use_container_width=True):
         if "api" not in config_data: config_data["api"] = {}
         if "agent" not in config_data: config_data["agent"] = {}
         if "logging" not in config_data: config_data["logging"] = {"level": "INFO", "log_dir": "logs"}
 
-        config_data["api"]["provider"] = new_provider
+        config_data["api"]["provider"] = new_provider_code
         # Encrypt the API key if a password is configured, otherwise save as plaintext
         if new_api_key and is_password_set() and "session_key" in st.session_state:
             config_data["api"]["api_key"] = encrypt_token(new_api_key, st.session_state.session_key)
         else:
             config_data["api"]["api_key"] = new_api_key
+        config_data["api"]["base_url"] = new_base_url if new_provider_code == "openai" else ""
         config_data["api"]["model"] = new_model
         config_data["api"]["temperature"] = new_temp
         config_data["api"]["max_tokens"] = new_tokens
@@ -400,16 +489,16 @@ def settings_modal():
         config_data["agent"]["language"] = new_lang
         config_data["logging"]["output_dest"] = new_log_dest
 
+        # Save screen control settings
+        if "screen_control" not in config_data:
+            config_data["screen_control"] = {"method": "ui_automation"}
+        config_data["screen_control"]["computer_use_fallback"] = cu_fallback
+
         save_json_file(config_path, config_data)
 
-        # Apply changes to the live agent instance without restarting
-        st.session_state.agent.config = config_data
-        st.session_state.agent.logger.set_output_destination(new_log_dest)
-
-        # Reinitialize the Anthropic client with the PLAINTEXT key (not encrypted)
-        api_key_to_use = new_api_key or os.environ.get("ANTHROPIC_API_KEY")
-        if api_key_to_use:
-            st.session_state.agent.client = anthropic.Anthropic(api_key=api_key_to_use)
+        # Tell the orchestrator to reload config from disk so the
+        # live agent picks up the new settings (model, temperature, etc.)
+        st.session_state.ipc.reload_config()
 
         st.success(t.get("success_save", "Saved successfully!"))
 
@@ -479,7 +568,7 @@ def settings_modal():
 @st.dialog(t.get("profiles_title", "👤 Profiles"), width="large")
 def profiles_modal():
     st.write(t.get("profiles_desc", "Edit user and agent profiles."))
-    config_data = st.session_state.agent.config
+    config_data = load_json(BASE_DIR / "settings" / "config.json")
 
     user_path = BASE_DIR / config_data.get("paths", {}).get("user_profile", "profiles/user.json")
     agent_path = BASE_DIR / config_data.get("paths", {}).get("agent_profile", "profiles/agent.json")
@@ -626,7 +715,7 @@ def profiles_modal():
 def tools_modal():
     st.write(t.get("tools_desc", "Available tools for ARIEL:"))
 
-    config_data = st.session_state.agent.config
+    config_data = load_json(BASE_DIR / "settings" / "config.json")
     tool_index_path = config_data.get("paths", {}).get("tool_index", "settings/toolindex.json")
     tools_impl_path = config_data.get("paths", {}).get("tools", "settings/tools.json")
 
@@ -661,7 +750,7 @@ def tools_modal():
 
 # ═══════════════════════════════════════════════════════════════════
 #  MODAL 4: INTEGRATIONS (Connectors)
-#  Configure and control external gateways (Telegram, etc.).
+#  Configure and control external gateways (Telegram, WhatsApp, etc.).
 # ═══════════════════════════════════════════════════════════════════
 
 @st.dialog(t.get("integrations_title", "🔌 Connectors"), width="large")
@@ -697,7 +786,7 @@ def integrations_modal():
             config_data["integrations"]["telegram"]["chat_id"] = tg_chat
 
             save_json_file(config_path, config_data)
-            st.session_state.agent.config = config_data
+            st.session_state.ipc.reload_config()
             st.success(t.get("success_save", "Saved successfully!"))
 
         st.markdown("---")
@@ -715,6 +804,7 @@ def integrations_modal():
                 kill_previous_process("telegram.pid")
 
                 # Launch the Telegram bot as a background subprocess
+                # (it will decrypt its token via IPC from the orchestrator)
                 kwargs = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {"start_new_session": True}
                 proc = subprocess.Popen(
                     [sys.executable, "gateways/telegram_bot.py"],
@@ -730,6 +820,137 @@ def integrations_modal():
                 # Terminate the bot and remove the PID file
                 kill_previous_process("telegram.pid")
                 st.rerun()
+
+    # ── WhatsApp section ────────────────────────────────────────────
+    wa_data = config_data["integrations"].get("whatsapp", {})
+
+    with st.expander(t.get("lbl_wa_section", "💬 WhatsApp"), expanded=False):
+        wa_enabled = st.toggle(t.get("lbl_wa_enable", "Enable WhatsApp"), value=wa_data.get("enabled", False))
+
+        # Security passphrase
+        wa_passphrase = st.text_input(
+            t.get("lbl_wa_passphrase", "Security passphrase"),
+            value=wa_data.get("passphrase", ""),
+            type="password",
+            help=t.get("help_wa_passphrase",
+                "A secret phrase that contacts must send as their first message to activate ARIEL. "
+                "Only contacts in your phone's address book who also know the passphrase can use the bot. "
+                "Leave empty to accept all known contacts without a passphrase.")
+        )
+
+        # Save WhatsApp configuration
+        if st.button(t.get("save_changes", "💾 Save Changes"), key="save_wa"):
+            if "integrations" not in config_data: config_data["integrations"] = {}
+            if "whatsapp" not in config_data["integrations"]: config_data["integrations"]["whatsapp"] = {}
+
+            config_data["integrations"]["whatsapp"]["enabled"] = wa_enabled
+            config_data["integrations"]["whatsapp"]["passphrase"] = wa_passphrase.strip()
+
+            save_json_file(config_path, config_data)
+            st.session_state.ipc.reload_config()
+            st.success(t.get("success_save", "Saved successfully!"))
+
+        st.markdown("---")
+
+        # Show authorized devices (LIDs that have sent the passphrase)
+        auth_file = BASE_DIR / "settings" / "whatsapp_authorized.json"
+        if auth_file.exists():
+            auth_data = load_json(auth_file)
+            authorized = auth_data.get("authorized", {})
+            if authorized:
+                st.markdown(f"**{t.get('wa_authorized_title', 'Authorized devices')}** ({len(authorized)}):")
+                for lid, info in authorized.items():
+                    # Backwards compatible: old format is "name", new format is {"name": ..., "jid_user": ...}
+                    if isinstance(info, dict):
+                        display_name = info.get("name", lid)
+                        jid_user = info.get("jid_user", "")
+                        detail = f" · {jid_user}" if jid_user else ""
+                    else:
+                        display_name = info
+                        detail = ""
+                    st.caption(f"  ✅ {display_name}{detail}")
+
+                if st.button(t.get("wa_revoke_all", "🗑️ Revoke all authorizations"), key="wa_revoke"):
+                    save_json_file(auth_file, {"authorized": {}})
+                    # Stop the bot so it doesn't keep the old session alive
+                    kill_previous_process("whatsapp.pid")
+                    # Delete the neonize session files so a fresh QR is shown on next start
+                    _wa_session = BASE_DIR / "settings" / "whatsapp_session"
+                    if _wa_session.exists():
+                        _wa_session.unlink(missing_ok=True)
+                    _wa_session2 = BASE_DIR / "settings" / "ariel_whatsapp"
+                    if _wa_session2.exists():
+                        _wa_session2.unlink(missing_ok=True)
+                    # Clear the status file
+                    _wa_status = TMP_DIR / "whatsapp_status.txt"
+                    if _wa_status.exists():
+                        _wa_status.unlink(missing_ok=True)
+                    st.success(t.get("wa_revoked_full",
+                        "All authorizations revoked and device unlinked. "
+                        "Press ▶️ Start Bot to scan a new QR code."))
+                    st.rerun()
+
+        st.markdown("---")
+
+        # Show current WhatsApp bot status
+        wa_is_running = is_process_running("whatsapp.pid")
+
+        # Read connection status from the status file
+        wa_status_file = TMP_DIR / "whatsapp_status.txt"
+        wa_conn_status = ""
+        if wa_status_file.exists():
+            try:
+                wa_conn_status = wa_status_file.read_text(encoding="utf-8").strip()
+            except Exception:
+                pass
+
+        if wa_is_running:
+            if wa_conn_status == "connected":
+                st.info(f"{t.get('bot_status', 'Bot Status')}: **{t.get('wa_connected', '🟢 Connected')}**")
+            elif wa_conn_status in ("waiting_qr", "connecting", "starting"):
+                st.warning(f"{t.get('bot_status', 'Bot Status')}: **{t.get('wa_connecting', '🟡 Waiting for QR scan...')}**")
+
+                qr_path = TMP_DIR / "whatsapp_qr.png"
+                if qr_path.exists():
+                    st.image(str(qr_path), caption=t.get("wa_scan_qr", "Scan this QR code with WhatsApp → Settings → Linked Devices → Link a Device"), width=300)
+                    st.caption(t.get("wa_qr_reopen", "After scanning, close this window and reopen Connectors to see the updated status."))
+                else:
+                    st.caption(t.get("wa_qr_loading", "QR code is being generated... Close and reopen this window in a few seconds."))
+            else:
+                st.info(f"{t.get('bot_status', 'Bot Status')}: **{t.get('bot_running', '🟢 Running')}** ({wa_conn_status})")
+        else:
+            st.info(f"{t.get('bot_status', 'Bot Status')}: **{t.get('bot_stopped', '🔴 Stopped')}**")
+
+        # Start / Stop buttons
+        col_wa_start, col_wa_stop = st.columns(2)
+        with col_wa_start:
+            if st.button(t.get("btn_start_bot", "▶️ Start Bot"), disabled=wa_is_running, use_container_width=True, key="wa_start"):
+                kill_previous_process("whatsapp.pid")
+
+                # Launch the WhatsApp bot as a background subprocess
+                # (it uses IPC for all AI processing — no local session key needed)
+                wa_kwargs = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {"start_new_session": True}
+                proc = subprocess.Popen(
+                    [sys.executable, "gateways/whatsapp_bot.py"],
+                    cwd=str(BASE_DIR),
+                    **wa_kwargs
+                )
+                (TMP_DIR / "whatsapp.pid").write_text(str(proc.pid))
+                st.rerun()
+
+        with col_wa_stop:
+            if st.button(t.get("btn_stop_bot", "⏹️ Stop Bot"), disabled=not wa_is_running, use_container_width=True, key="wa_stop"):
+                kill_previous_process("whatsapp.pid")
+                if wa_status_file.exists():
+                    wa_status_file.unlink(missing_ok=True)
+                st.rerun()
+
+        # Help text
+        st.caption(t.get("wa_help",
+            "WhatsApp connects via Linked Devices (like WhatsApp Web). "
+            "Scan the QR on first start. Security: only contacts in your phone's "
+            "address book can interact with ARIEL, and if a passphrase is set, "
+            "they must send it first to activate their access."))
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -766,8 +987,8 @@ def tasks_modal():
 
         selected_days = []
         for i, col in enumerate(cols):
-            # Weekdays (Mon-Fri) are checked by default, weekends unchecked
-            is_checked = col.checkbox(t.get(day_keys[i], default_days[i]), value=(i < 5))
+            # All days checked by default
+            is_checked = col.checkbox(t.get(day_keys[i], default_days[i]), value=True)
             if is_checked:
                 selected_days.append(i)  # Store day index (0=Mon, 6=Sun)
 
@@ -830,7 +1051,7 @@ def tasks_modal():
 
 with st.sidebar:
     # Show current version from the agent class
-    v_actual = st.session_state.agent.VERSION
+    v_actual = ARIELAgent.VERSION
 
     st.markdown(f"""
         <div style='margin-top: -50px;'>
@@ -885,7 +1106,8 @@ with col_title:
 
 with col_lang:
     # Quick language switcher in the top-right corner
-    current_lang = st.session_state.agent.config.get("agent", {}).get("language", "en")
+    _live_config = load_json(BASE_DIR / "settings" / "config.json")
+    current_lang = _live_config.get("agent", {}).get("language", "en")
     lang_codes = ["es", "en"]
     lang_labels = [t.get("lang_spanish", "Spanish"), t.get("lang_english", "English")]
     lang_idx = lang_codes.index(current_lang) if current_lang in lang_codes else 1
@@ -902,12 +1124,11 @@ with col_lang:
 
     # If the user changed the language, persist it and reload the page
     if new_quick_lang != current_lang:
-        st.session_state.agent.config.setdefault("agent", {})["language"] = new_quick_lang
-
         config_path = BASE_DIR / "settings" / "config.json"
         config_data = load_json(config_path)
         config_data.setdefault("agent", {})["language"] = new_quick_lang
         save_json_file(config_path, config_data)
+        st.session_state.ipc.reload_config()
 
         st.rerun()
 
@@ -944,7 +1165,7 @@ with tab_chat:
             full_resp = ""
 
             # Iterate through the agent's generator, updating the UI in real time
-            for update in st.session_state.agent.run(prompt):
+            for update in st.session_state.ipc.run_task(prompt, "gui"):
                 if update["type"] == "message":
                     full_resp += update["content"] + "\n\n"
                     msg_ph.markdown(full_resp)
@@ -966,12 +1187,14 @@ with tab_chat:
 # ── TAB 2: SHORT-TERM MEMORY ───────────────────────────────────────
 with tab_st_mem:
     st.subheader(t.get("tab_st_mem", "🐠 Short-Term Mem"))
-    if not st.session_state.agent.memory.messages:
+    _st_mem = st.session_state.ipc.get_short_term_memory()
+    if not _st_mem:
         st.info(t.get("no_st_mem", "No context in memory currently."))
     else:
         # Show the raw JSON payload that gets sent to the LLM API
         with st.expander(t.get("view_context", "View context sent to LLM"), expanded=True):
-            st.json(st.session_state.agent.memory.get_api_messages())
+            _api_msgs = st.session_state.ipc.get_api_messages()
+            st.json(_api_msgs)
 
 
 # ── TAB 3: LONG-TERM MEMORY ────────────────────────────────────────
@@ -1033,7 +1256,7 @@ with tab_lt_mem:
 with tab_debug:
     st.subheader(t.get("tab_debug", "🐞 Debug (Logs)"))
 
-    log_dir_name = st.session_state.agent.config.get("logging", {}).get("log_dir", "logs")
+    log_dir_name = load_json(BASE_DIR / "settings" / "config.json").get("logging", {}).get("log_dir", "logs")
     log_dir_path = BASE_DIR / log_dir_name
 
     # Find all .log files, sorted by modification time (newest first)

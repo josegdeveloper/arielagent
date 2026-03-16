@@ -4,10 +4,14 @@
 
 # ── CORE: REQUIRED FOR ARIEL TO WORK ──────────────────────────
 anthropic>=0.40.0               # OFFICIAL ANTHROPIC API CLIENT (CLAUDE LLM)
+openai>=1.0.0                   # OPENAI-COMPATIBLE API CLIENT (LM Studio, Ollama, GPT, etc.)
 pyautogui>=0.9.54               # MOUSE, KEYBOARD AND SCREENSHOT CONTROL
 Pillow>=10.0.0                  # IMAGE PROCESSING (SCREENSHOTS, RESIZING)
 streamlit                       # WEB-BASED GUI FRAMEWORK
 cryptography                    # AES-128 ENCRYPTION FOR TOKENS AND PASSWORDS
+
+# ── SCREEN CONTROL ───────────────────────────────────────────
+pywinauto>=0.6.8                # UI AUTOMATION VIA WINDOWS ACCESSIBILITY TREE
 
 # ── MEMORY AND SEARCH ─────────────────────────────────────────
 numpy>=1.24.0                   # COSINE SIMILARITY FOR SEMANTIC MEMORY SEARCH
@@ -21,3 +25,5 @@ pypdf                           # PDF FILE READING AND PROCESSING
 
 # ── EXTERNAL INTEGRATIONS ─────────────────────────────────────
 python-telegram-bot             # TELEGRAM BOT FOR NOTIFICATIONS AND REMOTE CONTROL
+neonize                         # WHATSAPP WEB PROTOCOL (WHATSMEOW-BASED) FOR WHATSAPP GATEWAY
+qrcode[pil]                     # QR CODE IMAGE GENERATION FOR WHATSAPP PAIRING

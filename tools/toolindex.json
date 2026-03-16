@@ -4,194 +4,6 @@
   "last_updated": "2025-02-17",
   "tools": [
     {
-      "name": "screenshot",
-      "description": "Captures the current screen and returns it as an image. The image includes an overlaid grid with numerical coordinates. Use the numbers from this grid as a mandatory visual reference to calculate exact X and Y values before using the mouse_click tool.",
-      "implementation_ref": "screenshot",
-      "returns": "image",
-      "platform": "all",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "region": {
-            "type": "object",
-            "description": "Region to capture. If null, captures the entire screen.",
-            "properties": {
-              "x": {
-                "type": "integer"
-              },
-              "y": {
-                "type": "integer"
-              },
-              "width": {
-                "type": "integer"
-              },
-              "height": {
-                "type": "integer"
-              }
-            }
-          }
-        },
-        "required": []
-      }
-    },
-    {
-      "name": "mouse_click",
-      "description": "Clicks the mouse at a screen position.",
-      "implementation_ref": "mouse_click",
-      "returns": "text",
-      "platform": "all",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "x": {
-            "type": "integer",
-            "description": "X coordinate in pixels"
-          },
-          "y": {
-            "type": "integer",
-            "description": "Y coordinate in pixels"
-          },
-          "button": {
-            "type": "string",
-            "enum": [
-              "left",
-              "right",
-              "middle"
-            ],
-            "default": "left"
-          },
-          "clicks": {
-            "type": "integer",
-            "description": "Number of clicks (1 or 2)",
-            "default": 1
-          }
-        },
-        "required": [
-          "x",
-          "y"
-        ]
-      }
-    },
-    {
-      "name": "mouse_move",
-      "description": "Moves the mouse to a position without clicking.",
-      "implementation_ref": "mouse_move",
-      "returns": "text",
-      "platform": "all",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "x": {
-            "type": "integer"
-          },
-          "y": {
-            "type": "integer"
-          },
-          "duration": {
-            "type": "number",
-            "description": "Movement duration in seconds",
-            "default": 0.5
-          }
-        },
-        "required": [
-          "x",
-          "y"
-        ]
-      }
-    },
-    {
-      "name": "mouse_scroll",
-      "description": "Scrolls the mouse at a position.",
-      "implementation_ref": "mouse_scroll",
-      "returns": "text",
-      "platform": "all",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "x": {
-            "type": "integer"
-          },
-          "y": {
-            "type": "integer"
-          },
-          "clicks": {
-            "type": "integer",
-            "description": "Positive = up, negative = down"
-          }
-        },
-        "required": [
-          "x",
-          "y",
-          "clicks"
-        ]
-      }
-    },
-    {
-      "name": "keyboard_type",
-      "description": "Types text using the keyboard in the active element.",
-      "implementation_ref": "keyboard_type",
-      "returns": "text",
-      "platform": "all",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "text": {
-            "type": "string",
-            "description": "Text to type"
-          },
-          "interval": {
-            "type": "number",
-            "description": "Pause between keys in seconds",
-            "default": 0.05
-          }
-        },
-        "required": [
-          "text"
-        ]
-      }
-    },
-    {
-      "name": "keyboard_hotkey",
-      "description": "Executes a keyboard shortcut like Ctrl+C, Alt+F4, Win+D, etc.",
-      "implementation_ref": "keyboard_hotkey",
-      "returns": "text",
-      "platform": "all",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "keys": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "List of keys for the shortcut. Example: ['ctrl', 'c']"
-          }
-        },
-        "required": [
-          "keys"
-        ]
-      }
-    },
-    {
-      "name": "keyboard_press",
-      "description": "Presses a special key (enter, esc, tab, delete, f1-f12, etc.).",
-      "implementation_ref": "keyboard_press",
-      "returns": "text",
-      "platform": "all",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string",
-            "description": "Name of the key"
-          }
-        },
-        "required": [
-          "key"
-        ]
-      }
-    },
-    {
       "name": "run_command",
       "description": "Executes a command in the operating system and returns the output.",
       "implementation_ref": "run_command",
@@ -654,6 +466,117 @@
         },
         "required": [
           "image_path"
+        ]
+      }
+    },
+    {
+      "name": "ui_snapshot",
+      "description": "Returns a structured text listing of all visible UI elements in the active window (or a specific window). Each element shows its type (Button, Edit, ComboBox...), name, current value, state, center coordinates, and size. ALWAYS call this BEFORE ui_click or ui_type to discover available elements. This is fast and cheap — prefer it over screenshots.",
+      "implementation_ref": "ui_snapshot",
+      "returns": "text",
+      "platform": "windows",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "window_title": {
+            "type": "string",
+            "description": "Optional: filter by window title (substring match). If empty, uses the foreground window."
+          },
+          "max_elements": {
+            "type": "integer",
+            "description": "Maximum number of elements to return. Default: 80.",
+            "default": 80
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "ui_click",
+      "description": "Clicks a UI element identified by its name, control type, or automation ID. Use ui_snapshot first to discover available elements and their exact names. At least one of name, control_type, or automation_id must be provided.",
+      "implementation_ref": "ui_click",
+      "returns": "text",
+      "platform": "windows",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name/title of the element to click (e.g., 'Save', 'OK', 'File')."
+          },
+          "control_type": {
+            "type": "string",
+            "description": "The control type (e.g., 'Button', 'MenuItem', 'ListItem', 'TabItem')."
+          },
+          "automation_id": {
+            "type": "string",
+            "description": "The automation ID of the element (shown in ui_snapshot as 'id=...')."
+          },
+          "window_title": {
+            "type": "string",
+            "description": "Optional: filter by window title to narrow the search."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "ui_type",
+      "description": "Types text into a UI element (text field, combo box, etc.). If name or automation_id is provided, finds and focuses the element first. Otherwise types into the currently focused element.",
+      "implementation_ref": "ui_type",
+      "returns": "text",
+      "platform": "windows",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The text to type."
+          },
+          "name": {
+            "type": "string",
+            "description": "Optional: name of the element to type into."
+          },
+          "automation_id": {
+            "type": "string",
+            "description": "Optional: automation ID of the element."
+          },
+          "window_title": {
+            "type": "string",
+            "description": "Optional: filter by window title."
+          },
+          "clear_first": {
+            "type": "boolean",
+            "description": "If true, clears the field before typing. Default: false.",
+            "default": false
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "send_whatsapp_message",
+      "description": "Sends a text message to the user via WhatsApp proactively. Use this ALWAYS when the user asks you to notify, warn, or send something via WhatsApp. The message will be delivered to the first authorized WhatsApp contact.",
+      "implementation_ref": "send_whatsapp_message",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "The complete and formatted message you want to send to the user."
+          },
+          "phone": {
+            "type": "string",
+            "description": "Optional: contact name or phone number. If omitted and only one contact is authorized, sends to them. If multiple contacts exist, you MUST specify who.",
+            "default": ""
+          }
+        },
+        "required": [
+          "message"
         ]
       }
     }

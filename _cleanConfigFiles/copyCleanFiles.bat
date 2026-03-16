@@ -38,5 +38,20 @@ for %%D in (logs memory profiles settings) do (
 )
 
 echo.
+REM Limpiar archivos de sesión WhatsApp
+echo Limpiando sesion WhatsApp...
+if exist "%DST%\settings\whatsapp_session" del /q /f "%DST%\settings\whatsapp_session" >nul 2>&1
+del /q /f "%DST%\settings\whatsapp_session.*" >nul 2>&1
+if exist "%DST%\settings\whatsapp_authorized.json" del /q /f "%DST%\settings\whatsapp_authorized.json" >nul 2>&1
+REM Clean legacy session file from project root (old location)
+if exist "%DST%\ariel_whatsapp" del /q /f "%DST%\ariel_whatsapp" >nul 2>&1
+del /q /f "%DST%\ariel_whatsapp.*" >nul 2>&1
+REM Clean session key temp files (should never persist, but just in case)
+if exist "%DST%\tmp\session.key" del /q /f "%DST%\tmp\session.key" >nul 2>&1
+if exist "%DST%\tmp\whatsapp_session.key" del /q /f "%DST%\tmp\whatsapp_session.key" >nul 2>&1
+if exist "%DST%\tmp\telegram_session.key" del /q /f "%DST%\tmp\telegram_session.key" >nul 2>&1
+echo OK WhatsApp
+
+echo.
 echo Hecho.
 exit /b 0

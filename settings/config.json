@@ -3,6 +3,7 @@
   "api": {
     "provider": "anthropic",
     "api_key": "[YOUR-KEY-HERE]",
+    "base_url": "",
     "model": "claude-sonnet-4-5-20250929",
     "max_tokens": 4096,
     "temperature": 0.0
@@ -10,6 +11,11 @@
   "agent": {
     "max_steps_per_task": 15,
     "language": "en"
+  },
+  "screen_control": {
+    "_description": "Controls how ARIEL interacts with the desktop UI.",
+    "method": "ui_automation",
+    "computer_use_fallback": false
   },
   "paths": {
     "laws": "settings/laws.json",
@@ -28,6 +34,10 @@
       "enabled": false,
       "bot_token": "",
       "chat_id": ""
+    },
+    "whatsapp": {
+      "enabled": false,
+      "passphrase": ""
     }
   }
 }

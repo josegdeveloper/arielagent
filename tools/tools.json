@@ -2,65 +2,6 @@
   "_description": "Tool implementations. Each entry corresponds to an 'implementation_ref' in toolindex.json.",
   "version": "1.1.0",
   "implementations": {
-    "screenshot": {
-      "type": "python",
-      "description": "Captures the screen using pyautogui and Pillow.",
-      "dependencies": [
-        "pyautogui",
-        "Pillow"
-      ],
-      "code": "import pyautogui\nfrom PIL import Image, ImageDraw\nfrom io import BytesIO\nimport base64\nfrom pathlib import Path\n\n# Ensure tmp/ directory exists\ntmp_dir = Path('.') / 'tmp'\ntmp_dir.mkdir(exist_ok=True)\n\nregion = params.get('region')\nif region:\n    img = pyautogui.screenshot(region=(region['x'], region['y'], region['width'], region['height']))\nelse:\n    img = pyautogui.screenshot()\n\n# Save a CLEAN screenshot (no grid) for other tools like send_telegram_photo\nclean_path = str(tmp_dir / 'last_screenshot.png')\nimg.save(clean_path)\n\n# --- DRAW HIGH CONTRAST GRID (only on the copy sent to Claude) ---\ngrid_img = img.copy()\ndraw = ImageDraw.Draw(grid_img, 'RGBA')\nwidth, height = grid_img.size\nstep = 100\n\n# Vertical lines (X Axis)\nfor x in range(0, width, step):\n    draw.line([(x, 0), (x, height)], fill=(255, 0, 0, 120), width=1)\n    draw.rectangle([(x + 2, 2), (x + 28, 14)], fill=(0, 0, 0, 255))\n    draw.text((x + 4, 2), str(x), fill=(255, 255, 255, 255))\n\n# Horizontal lines (Y Axis)\nfor y in range(0, height, step):\n    draw.line([(0, y), (width, y)], fill=(255, 0, 0, 120), width=1)\n    if y > 0:\n        draw.rectangle([(2, y + 2), (28, y + 14)], fill=(0, 0, 0, 255))\n        draw.text((4, y + 2), str(y), fill=(255, 255, 255, 255))\n\n# Save grid version for debugging\ngrid_img.save(str(tmp_dir / 'debug_screenshot.png'))\n\n# Return grid version to Claude (so it can read coordinates)\nbuffer = BytesIO()\ngrid_img.save(buffer, format='PNG')\nb64 = base64.standard_b64encode(buffer.getvalue()).decode('utf-8')\nreturn {'type': 'image', 'data': b64, 'media_type': 'image/png', 'clean_path': clean_path}\n"
-    },
-    "mouse_click": {
-      "type": "python",
-      "description": "Mouse click with pyautogui.",
-      "dependencies": [
-        "pyautogui"
-      ],
-      "code": "import pyautogui\npyautogui.click(params['x'], params['y'], button=params.get('button','left'), clicks=params.get('clicks',1))\nreturn f\"Clicked {params.get('button','left')} at ({params['x']}, {params['y']})\""
-    },
-    "mouse_move": {
-      "type": "python",
-      "description": "Move mouse without clicking.",
-      "dependencies": [
-        "pyautogui"
-      ],
-      "code": "import pyautogui\npyautogui.moveTo(params['x'], params['y'], duration=params.get('duration', 0.5))\nreturn f\"Mouse moved to ({params['x']}, {params['y']})\""
-    },
-    "mouse_scroll": {
-      "type": "python",
-      "description": "Mouse scroll.",
-      "dependencies": [
-        "pyautogui"
-      ],
-      "code": "import pyautogui\npyautogui.scroll(params['clicks'], x=params['x'], y=params['y'])\nreturn f\"Scrolled {params['clicks']} at ({params['x']}, {params['y']})\""
-    },
-    "keyboard_type": {
-      "type": "python",
-      "description": "Foolproof text typing using the clipboard (Ctrl+V) to avoid keyboard layout bugs.",
-      "dependencies": [
-        "pyautogui",
-        "pyperclip",
-        "time"
-      ],
-      "code": "import pyautogui\nimport pyperclip\nimport time\n\ntext = params['text']\n# 1. Copy to clipboard\npyperclip.copy(text)\ntime.sleep(0.1)\n\n# 2. Paste with Ctrl+V\npyautogui.hotkey('ctrl', 'v')\n\nreturn f\"Text typed (via clipboard): {text}\""
-    },
-    "keyboard_hotkey": {
-      "type": "python",
-      "description": "Keyboard shortcut.",
-      "dependencies": [
-        "pyautogui"
-      ],
-      "code": "import pyautogui\npyautogui.hotkey(*params['keys'])\nreturn f\"Shortcut executed: {' + '.join(params['keys'])}\""
-    },
-    "keyboard_press": {
-      "type": "python",
-      "description": "Special key press.",
-      "dependencies": [
-        "pyautogui"
-      ],
-      "code": "import pyautogui\npyautogui.press(params['key'])\nreturn f\"Key pressed: {params['key']}\""
-    },
     "run_command": {
       "type": "python",
       "description": "Executes operating system commands.",
@@ -199,6 +140,24 @@
         "requests"
       ],
       "code": "import requests\nfrom pathlib import Path\nfrom core.utils import load_json, BASE_DIR\nfrom core.security import decrypt_if_needed\n\nimage_path = params['image_path']\ncaption = params.get('caption', '')\n\nconfig = load_json(BASE_DIR / 'settings' / 'config.json')\ntg_config = config.get('integrations', {}).get('telegram', {})\ntoken = decrypt_if_needed(tg_config.get('bot_token', ''))\nchat_id = tg_config.get('chat_id')\n\nif not token or not chat_id:\n    return 'Error: Telegram Token or Chat ID are not configured.'\n\nimg_file = Path(image_path)\nif not img_file.exists():\n    return f'Error: Image not found at {image_path}'\n\nurl = f'https://api.telegram.org/bot{token}/sendPhoto'\n\ntry:\n    with open(img_file, 'rb') as photo:\n        files = {'photo': photo}\n        payload = {'chat_id': chat_id, 'caption': caption}\n        response = requests.post(url, data=payload, files=files, timeout=30)\n        response.raise_for_status()\n    return 'Photo successfully sent to the user via Telegram.'\nexcept Exception as e:\n    return f'Error sending Telegram photo: {e}'\n"
+    },
+    "ui_snapshot": {
+      "type": "python",
+      "code": "from core.screen_control import UIAutomation\nfrom core.logger import LoggerManager\n\n_logger = LoggerManager({\"logging\": {\"log_dir\": \"logs\", \"level\": \"INFO\", \"output_dest\": \"GUI Tab\"}}, \"tool\")\nui = UIAutomation(_logger)\nwindow_title = params.get(\"window_title\", \"\")\nmax_elements = params.get(\"max_elements\", 80)\nreturn ui.get_snapshot(window_title=window_title, max_elements=max_elements)"
+    },
+    "ui_click": {
+      "type": "python",
+      "code": "from core.screen_control import UIAutomation\nfrom core.logger import LoggerManager\n\n_logger = LoggerManager({\"logging\": {\"log_dir\": \"logs\", \"level\": \"INFO\", \"output_dest\": \"GUI Tab\"}}, \"tool\")\nui = UIAutomation(_logger)\nreturn ui.click_element(\n    name=params.get(\"name\", \"\"),\n    control_type=params.get(\"control_type\", \"\"),\n    automation_id=params.get(\"automation_id\", \"\"),\n    window_title=params.get(\"window_title\", \"\")\n)"
+    },
+    "ui_type": {
+      "type": "python",
+      "code": "from core.screen_control import UIAutomation\nfrom core.logger import LoggerManager\n\n_logger = LoggerManager({\"logging\": {\"log_dir\": \"logs\", \"level\": \"INFO\", \"output_dest\": \"GUI Tab\"}}, \"tool\")\nui = UIAutomation(_logger)\nreturn ui.type_in_element(\n    text=params.get(\"text\", \"\"),\n    name=params.get(\"name\", \"\"),\n    automation_id=params.get(\"automation_id\", \"\"),\n    window_title=params.get(\"window_title\", \"\"),\n    clear_first=params.get(\"clear_first\", False)\n)"
+    },
+    "send_whatsapp_message": {
+      "type": "python",
+      "description": "Sends a WhatsApp message via the IPC outbox queue.",
+      "dependencies": [],
+      "code": "from core.ipc import ArielClient\nfrom core.utils import BASE_DIR, load_json\n\nmessage = params['message']\ncontact = params.get('phone', '').strip()\n\n# Load authorized contacts\nauth_path = BASE_DIR / 'settings' / 'whatsapp_authorized.json'\nauth_data = load_json(auth_path)\nauthorized = auth_data.get('authorized', {})\n\nif not authorized:\n    return 'Error: No authorized WhatsApp contacts found. Someone must send the passphrase to ARIEL on WhatsApp first.'\n\n# Find the target contact\ntarget = None\n\nif not contact:\n    # No contact specified\n    if len(authorized) == 1:\n        target = list(authorized.values())[0]\n    else:\n        names = [v.get('name', v) if isinstance(v, dict) else v for v in authorized.values()]\n        return f'There are {len(authorized)} authorized contacts: {\", \".join(names)}. Please specify who to send to.'\nelse:\n    # Search by name (case-insensitive) or by phone/LID\n    for lid, info in authorized.items():\n        if isinstance(info, dict):\n            name = info.get('name', '')\n            jid_user = info.get('jid_user', '')\n        else:\n            name = str(info)\n            jid_user = ''\n        if contact.lower() in name.lower() or contact == jid_user or contact == lid:\n            target = info if isinstance(info, dict) else {'name': name}\n            break\n    if not target:\n        names = [v.get('name', v) if isinstance(v, dict) else v for v in authorized.values()]\n        return f'Contact \"{contact}\" not found. Authorized contacts: {\", \".join(names)}.'\n\n# Extract the JID for sending\nif isinstance(target, dict):\n    jid_user = target.get('jid_user', '')\n    jid_server = target.get('jid_server', 's.whatsapp.net')\nelse:\n    jid_user = ''\n    jid_server = 's.whatsapp.net'\n\nif not jid_user:\n    return 'Error: No JID stored for this contact. They need to re-authorize by sending the passphrase again.'\n\n# Queue via IPC with both jid_user and jid_server\nipc = ArielClient(BASE_DIR)\nok = ipc.queue_whatsapp_message(jid_user, message, jid_server)\n\nname = target.get('name', jid_user) if isinstance(target, dict) else str(target)\nif ok:\n    return f'WhatsApp message sent to {name}.'\nelse:\n    return 'Error: Failed to queue WhatsApp message. Is the orchestrator running?'\n"
     }
   }
 }

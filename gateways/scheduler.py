@@ -1,18 +1,20 @@
 """
 gateways/scheduler.py — Automatic task scheduler.
 
-Runs as an independent background process (launched by start.py).
+Runs as an independent background process (launched by ariel.py).
 Every 30 seconds it checks the task list in settings/tasks.json
 and runs any tasks whose scheduled day and time match the current
 moment. Each task is executed at most once per minute to prevent
 duplicates.
 
-The scheduler creates its own ARIELAgent instance, so it has full
-access to all tools and memory — just like the chat interface.
+This is a thin client — it does NOT create its own ARIELAgent.
+All AI processing happens in the central orchestrator (ariel.py)
+via the IPC socket.
 """
 
 import sys
 import time
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -20,15 +22,27 @@ from pathlib import Path
 BASE_DIR = Path(__file__).parent.parent
 sys.path.append(str(BASE_DIR))
 
-from core.agent import ARIELAgent
+from core.ipc import ArielClient
 from core.utils import load_json
+
+# Simple logger for the scheduler process
+log = logging.getLogger("scheduler")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [SCHED] %(message)s")
 
 
 def run_scheduler():
     """Main loop: check task schedule every 30 seconds and run matches."""
 
-    # Create a dedicated agent instance for the scheduler
-    agent = ARIELAgent()
+    # IPC client to communicate with the orchestrator (instead of own agent)
+    ipc = ArielClient(BASE_DIR)
+
+    # Wait for the orchestrator to be ready before entering the loop
+    for _attempt in range(30):
+        if ipc.ping():
+            break
+        time.sleep(1)
+
+    log.info("Scheduler connected to orchestrator.")
 
     # Track which tasks have already run in the current minute
     # to avoid executing the same task multiple times
@@ -61,15 +75,17 @@ def run_scheduler():
 
                     # Only run if we haven't already executed in this minute
                     if last_executed.get(task_id) != execution_key:
-                        agent.logger.info(f"⏰ [SCHEDULER] Launching scheduled task: {task.get('prompt')}")
+                        log.info(f"⏰ Launching scheduled task: {task.get('prompt')}")
                         last_executed[task_id] = execution_key
 
-                        # Run the agent — since run() is a generator, we
-                        # consume it fully. Output goes to logs, not screen.
-                        for update in agent.run(task["prompt"]):
-                            pass
-
-                        agent.logger.info(f"✅ [SCHEDULER] Task '{task.get('prompt')}' finished.")
+                        # Run the task via IPC — consume the generator fully.
+                        # Output goes to orchestrator logs, not to screen.
+                        try:
+                            for update in ipc.run_task(task["prompt"], source="scheduler"):
+                                pass
+                            log.info(f"✅ Task '{task.get('prompt')}' finished.")
+                        except Exception as e:
+                            log.error(f"Task execution error: {e}")
 
         except Exception:
             # If there's an error reading the file (e.g., user is editing it

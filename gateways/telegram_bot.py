@@ -1,14 +1,17 @@
 """
 gateways/telegram_bot.py — Telegram gateway for ARIEL.
 
-Runs as an independent background process (launched by start.py or
+Runs as an independent background process (launched by ariel.py or
 from the GUI's Connectors modal). Listens for messages on a Telegram
-bot and forwards them to the ARIEL agent for processing.
+bot and forwards them to the ARIEL orchestrator via IPC for processing.
+
+This is a thin client — it does NOT create its own ARIELAgent.
+All AI processing happens in the central orchestrator (ariel.py).
 
 Supports:
-  - Text messages: sent directly to the agent.
-  - File uploads: saved to the uploads/ folder and passed to the agent
-    with an instruction (either the caption or a default prompt).
+  - Text messages: sent directly to the orchestrator.
+  - File uploads: saved to the uploads/ folder and passed to the
+    orchestrator with an instruction (either the caption or a default).
 
 Security: Only the chat_id configured in config.json is allowed to
 interact with the bot. All other messages are rejected.
@@ -24,15 +27,15 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 BASE_DIR = Path(__file__).parent.parent
 sys.path.append(str(BASE_DIR))
 
-from core.agent import ARIELAgent
+from core.ipc import ArielClient
 from core.utils import get_translations, load_json
 
 
 class ArielTelegramGateway:
-    """Telegram bot that bridges messages between Telegram and the ARIEL agent."""
+    """Telegram bot that bridges messages between Telegram and the ARIEL orchestrator."""
 
     def __init__(self):
-        """Load config, translations, and initialize the agent (if enabled)."""
+        """Load config, translations, and initialize the IPC client."""
         config_path = BASE_DIR / "settings" / "config.json"
         self.config = load_json(config_path)
 
@@ -43,14 +46,14 @@ class ArielTelegramGateway:
         # Read Telegram-specific settings
         self.tg_config = self.config.get("integrations", {}).get("telegram", {})
         self.enabled = self.tg_config.get("enabled", False)
-        # Decrypt the bot token if it's encrypted (prefixed with 'ENC:')
-        from core.security import decrypt_if_needed
-        self.token = decrypt_if_needed(self.tg_config.get("bot_token", ""))
         self.allowed_chat_id = str(self.tg_config.get("chat_id", "")).strip()
 
-        # Only create the (expensive) agent instance if Telegram is enabled
-        if self.enabled and self.token:
-            self.agent = ARIELAgent()
+        # IPC client to communicate with the orchestrator
+        if self.enabled:
+            self.ipc = ArielClient(BASE_DIR)
+            # Decrypt the bot token via the orchestrator (which has the session key)
+            raw_token = self.tg_config.get("bot_token", "")
+            self.token = self.ipc.decrypt_token(raw_token)
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle the /start command — greet the user or deny access."""
@@ -71,7 +74,7 @@ class ArielTelegramGateway:
         await self._process_with_agent(user_text, update, status_message)
 
     async def handle_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Receive a file, save it locally, and pass it to the agent."""
+        """Receive a file, save it locally, and pass it to the orchestrator."""
         if str(update.effective_chat.id) != self.allowed_chat_id:
             return
 
@@ -99,14 +102,14 @@ class ArielTelegramGateway:
         await self._process_with_agent(prompt_with_path, update, status_msg)
 
     async def _process_with_agent(self, text: str, update: Update, status_msg):
-        """Common logic to execute a task and send results back to Telegram.
+        """Common logic to send a task to the orchestrator and relay results.
 
-        Iterates through the agent's generator, collecting text responses
+        Iterates through the IPC client's generator, collecting text responses
         and updating the status message with tool activity.
         """
         full_response = ""
         try:
-            for update_data in self.agent.run(text):
+            for update_data in self.ipc.run_task(text, source="telegram"):
                 if update_data["type"] == "message":
                     full_response += update_data["content"] + "\n\n"
                 elif update_data["type"] == "tool_start":

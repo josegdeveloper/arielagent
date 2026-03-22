@@ -366,6 +366,30 @@
       }
     },
     {
+      "name": "web_search_tavily",
+      "description": "Web search powered by Tavily API. Returns titles, URLs, and snippets. Use as an alternative to web_search when Tavily is configured as the search provider.",
+      "implementation_ref": "web_search_tavily",
+      "returns": "text",
+      "platform": "all",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "The search query (e.g., 'german shepherd dog')"
+          },
+          "max_results": {
+            "type": "integer",
+            "description": "Maximum number of results to return",
+            "default": 5
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
       "name": "web_fetch",
       "description": "Downloads a web page from its URL and extracts all its clean text (processed DOM, without HTML code or menus). Ideal for reading articles or extracting detailed information from a web_search result.",
       "implementation_ref": "web_fetch",

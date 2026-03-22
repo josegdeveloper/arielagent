@@ -19,6 +19,7 @@ sentence-transformers            # EMBEDDING MODEL FOR LONG-TERM MEMORY
 
 # ── AGENT TOOLS ───────────────────────────────────────────────
 ddgs                            # WEB SEARCH VIA DUCKDUCKGO
+tavily-python                   # WEB SEARCH VIA TAVILY API (OPTIONAL PROVIDER)
 beautifulsoup4                  # HTML CONTENT EXTRACTION FROM WEB PAGES
 requests                        # HTTP REQUESTS
 pypdf                           # PDF FILE READING AND PROCESSING

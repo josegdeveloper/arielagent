@@ -92,6 +92,14 @@
       ],
       "code": "from ddgs import DDGS\nquery = params['query']\nmax_results = params.get('max_results', 5)\ntry:\n    with DDGS() as ddgs:\n        results = list(ddgs.text(query, max_results=max_results))\n    formatted = []\n    for i, r in enumerate(results, 1):\n        formatted.append(f\"{i}. Title: {r['title']}\\n   URL: {r['href']}\\n   Snippet: {r['body']}\\n\")\n    return '\\n'.join(formatted) if formatted else 'No results found.'\nexcept Exception as e:\n    return f'Search error: {e}'"
     },
+    "web_search_tavily": {
+      "type": "python",
+      "description": "Web search powered by Tavily API. Requires TAVILY_API_KEY env var or tavily_api_key in config.",
+      "dependencies": [
+        "tavily-python"
+      ],
+      "code": "import os, json\nfrom pathlib import Path\nfrom tavily import TavilyClient\n\nquery = params['query']\nmax_results = params.get('max_results', 5)\n\n# Resolve API key: config file first, then env var\napi_key = os.environ.get('TAVILY_API_KEY', '')\ntry:\n    cfg_path = Path('settings/config.json')\n    if not cfg_path.exists():\n        cfg_path = Path(__file__).parent.parent / 'settings' / 'config.json' if '__file__' in dir() else cfg_path\n    if cfg_path.exists():\n        cfg = json.loads(cfg_path.read_text(encoding='utf-8'))\n        cfg_key = cfg.get('search', {}).get('tavily_api_key', '')\n        if cfg_key:\n            api_key = cfg_key\nexcept Exception:\n    pass\n\nif not api_key:\n    return 'Error: TAVILY_API_KEY not set. Add it to settings/config.json under search.tavily_api_key or set the TAVILY_API_KEY environment variable.'\n\ntry:\n    client = TavilyClient(api_key=api_key)\n    response = client.search(query=query, max_results=max_results, search_depth='basic')\n    results = response.get('results', [])\n    formatted = []\n    for i, r in enumerate(results, 1):\n        formatted.append(f\"{i}. Title: {r.get('title', '')}\\n   URL: {r.get('url', '')}\\n   Snippet: {r.get('content', '')}\\n\")\n    return '\\n'.join(formatted) if formatted else 'No results found.'\nexcept Exception as e:\n    return f'Tavily search error: {e}'"
+    },
     "web_fetch": {
       "type": "python",
       "description": "Extracts clean text from a URL's DOM using BeautifulSoup.",

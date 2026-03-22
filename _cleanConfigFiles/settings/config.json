@@ -29,6 +29,11 @@
     "level": "INFO",
     "output_dest": "GUI Tab"
   },
+  "search": {
+    "_description": "Web search provider configuration. Options: 'duckduckgo' (default, no API key needed) or 'tavily' (requires TAVILY_API_KEY).",
+    "provider": "duckduckgo",
+    "tavily_api_key": ""
+  },
   "integrations": {
     "telegram": {
       "enabled": false,
